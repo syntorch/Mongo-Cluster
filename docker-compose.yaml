@@ -6,6 +6,12 @@ services:
     container_name: router1
     image: mongo:6.0.1
     command: mongos --configdb cfg1/cfg1:27017 --bind_ip 0.0.0.0 --port 27017
+    # healthcheck:
+    #   test: echo 'db.runCommand("ping").ok' | mongosh router1:27017/test --quiet
+    #   interval: 10s
+    #   timeout: 10s
+    #   retries: 5
+    #   start_period: 40s
     ports:
       - 27100:27017
     volumes:
@@ -70,6 +76,17 @@ services:
       - dbms2_db:/data/db
       - dbms2_cfg:/data/configdb
 
+  shard_for_init1:
+    container_name: shard_for_init1
+    image: mongo:6.0.1
+    command: mongod --shardsvr --replSet shard_for_init1 --port 27017 --dbpath /data/db
+    ports:
+      - 27302:27017
+    volumes:
+      - ./init_scripts:/init_scripts
+      - shard_for_init1_db:/data/db
+      - shard_for_init1_cfg:/data/configdb
+
   gridfs1:
     container_name: gridfs1
     image: mongo:6.0.1
@@ -92,6 +109,34 @@ services:
       - gridfs2_db:/data/db
       - gridfs2_cfg:/data/configdb
 
+  monitor1:
+    container_name: monitor1
+    image: mongo-express
+    environment:
+      ME_CONFIG_MONGODB_SERVER: router1
+      ME_CONFIG_MONGODB_PORT: "27017"
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+      ME_CONFIG_BASICAUTH_USERNAME: root
+      ME_CONFIG_BASICAUTH_PASSWORD: root
+    ports:
+      - "8001:8081"
+    # depends_on:
+    #   - router1:
+    #     condition: service_healthy
+
+  # monitor2:
+  #   container_name: monitor2
+  #   image: mongo-express
+  #   environment:
+  #     ME_CONFIG_MONGODB_SERVER: router2
+  #     ME_CONFIG_MONGODB_PORT: "27017"
+  #     ME_CONFIG_BASICAUTH_USERNAME: root
+  #     ME_CONFIG_BASICAUTH_PASSWORD: root
+  #   ports:
+  #     - "8002:8081"
+  #   depends_on:
+  #     - router2
+
 
 volumes:
   router1_db:
@@ -106,6 +151,8 @@ volumes:
   dbms1_cfg:
   dbms2_db:
   dbms2_cfg:
+  shard_for_init1_db:
+  shard_for_init1_cfg:
   gridfs1_db:
   gridfs1_cfg:
   gridfs2_db:
