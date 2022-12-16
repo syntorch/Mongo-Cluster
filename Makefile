@@ -1,13 +1,12 @@
-all: up init load load_media
+all: up init load load_media sharding1 sharding2 sharding3 sharding4
 
-struct: up init load
+struct: up init load sharding1 sharding2 sharding3 sharding4
 
 init:
 	docker exec -it cfg1 bash -c "mongosh < /init_scripts/init_cfg1.js"
 	docker exec -it cfg2 bash -c "mongosh < /init_scripts/init_cfg2.js"
-	docker exec -it dbms1 bash -c "mongosh < /init_scripts/init_dbms1.js"
-	docker exec -it dbms2 bash -c "mongosh < /init_scripts/init_dbms2.js"
-	docker exec -it shard_for_init1 bash -c "mongosh < /init_scripts/init_shard_for_init1.js"
+	docker exec -it dbms1-svr1 bash -c "mongosh < /init_scripts/init_dbms1.js"
+	docker exec -it dbms2-svr1 bash -c "mongosh < /init_scripts/init_dbms2.js"
 	docker exec -it gridfs1 bash -c "mongosh < /init_scripts/init_gridfs1.js"
 	docker exec -it gridfs2 bash -c "mongosh < /init_scripts/init_gridfs2.js"
 	docker exec -it router1 bash -c "mongosh < /init_scripts/init_router1.js"
@@ -21,11 +20,17 @@ load:
 load_media:
 	python3 store_media.py
 
-shard:
-	docker exec -it router1 bash -c "mongosh < /init_scripts/popNshard.js"
+sharding1:
+	docker exec -it router1 bash -c "mongosh < /init_scripts/do_sharding-part1.js"
 
-sharding:
-	docker exec -it router1 bash -c "mongosh < /init_scripts/do_sharding.js"
+sharding2:
+	docker exec -it router1 bash -c "mongosh < /init_scripts/do_sharding-part2.js"
+
+sharding3:
+	docker exec -it router1 bash -c "mongosh < /init_scripts/do_sharding-beread.js"
+
+sharding4:
+	docker exec -it router1 bash -c "mongosh < /init_scripts/do_sharding-poprank.js"
 
 up:
 	docker-compose up -d

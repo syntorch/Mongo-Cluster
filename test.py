@@ -8,9 +8,9 @@ def mongo(client):
     # client = MongoClient("mongodb://localhost:27100/", serverSelectionTimeoutMS=maxSevSelDelay)
     print(client.server_info())
     print(client.list_database_names())
-    ddbs = client.ddbs
-    print(ddbs.db_info)
-    print(ddbs.list_collection_names())
+    # ddbs = client.ddbs
+    # print(ddbs.db_info)
+    # print(ddbs.list_collection_names())
     
    
     

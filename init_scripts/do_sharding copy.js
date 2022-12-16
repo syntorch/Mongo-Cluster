@@ -5,7 +5,7 @@
 //I have some data where it shouldn't be
 
 use ddbs
-db.adminCommand( { movePrimary : "ddbs", to : "shard_for_init1" } )
+// db.adminCommand( { movePrimary : "ddbs", to : "shard_for_init1" } )
 sh.enableSharding("ddbs")
 
 //----------------- shard user
@@ -108,8 +108,8 @@ db.read.aggregate(
                 _id: "$aid",
                 category: { $first: "$category" },
                 timestamp: { $first: "$timestamp" },
-                readNum: { $sum: {$toInt: "$readOrNot" } },
-                readUidList: { $addToSet: { $cond: { if: { $eq: ["$readOrNot","1"] }, then: "$uid", else: "$$REMOVE"} } },
+                readNum: { $sum: { $cond: { if: { $gt: [{$toInt: "$readTimeLength"},0] }, then: 1, else: 0} } },
+                readUidList: { $addToSet: { $cond: { if: { $gt: [{$toInt: "$readTimeLength"},0] }, then:  "$uid", else: "$$REMOVE"} } },
                 commentNum: { $sum: {$toInt: "$commentOrNot" } },
                 commentUidList: { $addToSet: { $cond: { if: { $eq: ["$commentOrNot","1"] }, then: "$uid", else: "$$REMOVE"} } },
                 agreeNum: { $sum: {$toInt: "$agreeOrNot" } },
@@ -118,9 +118,8 @@ db.read.aggregate(
                 shareUidList: { $addToSet: { $cond: { if: { $eq: ["$shareOrNot","1"] }, then: "$uid", else: "$$REMOVE"} } },
             }
         },
+        { $addFields: { "aid": "$_id"}},
 
-        // Modify aid from integer to string
-        { $addFields: { "aid": {$concat: [ "a", "$_id" ]}}},
 
         { $out: "beread"}
     ],
@@ -156,13 +155,13 @@ sh.enableBalancing("ddbs.beread")
 //popRankMth
 db.read.aggregate([
     // project relevant fields from db.read
-    { $project: { date: {"$toDate": {"$toLong": "$timestamp"}}, aid: 1, readOrNot: 1, agreeOrNot: 1, commentOrNot: 1, shareOrNot: 1} },
+    { $project: { date: {"$toDate": {"$toLong": "$timestamp"}}, aid: 1, readTimeLength: 1, agreeOrNot: 1, commentOrNot: 1, shareOrNot: 1} },
 
     // add year and month fields
     { $addFields: {
         year: { $year: "$date" },
         month: { $month: "$date" },
-        popScore: {$sum: [{$toInt: "$readOrNot"}, {$toInt: "$agreeOrNot"}, {$toInt: "$commentOrNot"}, {$toInt: "$shareOrNot"}]}}
+        popScore: {$sum: [{ if: { $gt: [{$toInt: "$readTimeLength"},0] }, then: 1, else: 0}, {$toInt: "$agreeOrNot"}, {$toInt: "$commentOrNot"}, {$toInt: "$shareOrNot"}]}}
     },
 
     // add unix timestamp defined only by yr and mth
@@ -204,102 +203,102 @@ db.read.aggregate([
 
 //popRankWk
 db.read.aggregate([
-            // project relevant fields from db.read
-            { $project: { date: {"$toDate": {"$toLong": "$timestamp"}}, aid: 1, readOrNot: 1, agreeOrNot: 1, commentOrNot: 1, shareOrNot: 1} },
+        // project relevant fields from db.read
+        { $project: { date: {"$toDate": {"$toLong": "$timestamp"}}, aid: 1, readTimeLength: 1, agreeOrNot: 1, commentOrNot: 1, shareOrNot: 1} },
 
-            // add year and month fields
-            { $addFields: {
-                year: { $year: "$date" },
-                month: { $month: "$date" },
-                week: {$week: "$date"},
-                popScore: {$sum: [{$toInt: "$readOrNot"}, {$toInt: "$agreeOrNot"}, {$toInt: "$commentOrNot"}, {$toInt: "$shareOrNot"}]}}
-            },
+        // add year and month fields
+        { $addFields: {
+            year: { $year: "$date" },
+            month: { $month: "$date" },
+            week: {$week: "$date"},
+            popScore: {$sum: [{ if: { $gt: [{$toInt: "$readTimeLength"},0] }, then: 1, else: 0}, {$toInt: "$agreeOrNot"}, {$toInt: "$commentOrNot"}, {$toInt: "$shareOrNot"}]}}
+        },
 
-            // add unix timestamp defined only by yr and mth
-            { $addFields: { timestamp: { $subtract: [ { $dateFromParts: { 'isoWeekYear' : "$year", 'isoWeek' : "$week"} }, new Date("1970-01-01") ] }}},
+        // add unix timestamp defined only by yr and mth
+        { $addFields: { timestamp: { $subtract: [ { $dateFromParts: { 'isoWeekYear' : "$year", 'isoWeek' : "$week"} }, new Date("1970-01-01") ] }}},
 
-            // Group by year, month, aid and compute popularity score
-            {
-                $group: {
-                    _id: { "timestamp": "$timestamp", "aid": "$aid"},
-                    popScoreAgg: { $sum: "$popScore" }
+        // Group by year, month, aid and compute popularity score
+        {
+            $group: {
+                _id: { "timestamp": "$timestamp", "aid": "$aid"},
+                popScoreAgg: { $sum: "$popScore" }
+            }
+        },
+
+        // sort by popScore each month
+        { $sort: {"_id.timestamp": 1, "popScoreAgg": -1} },
+
+        // store all articles in sorted order in array for each month
+        {
+            $group: {
+                _id: "$_id.timestamp",
+                articleAidList: {$push: "$_id.aid"}
+            }
+        },
+
+        // keep only top five articles in array
+        { 
+            $project: { 
+                _id: {$concat: ["w", { $toString: "$_id" }]}, 
+                timestamp: "$_id", 
+                articleAidList: { $slice: ["$articleAidList", 5]},
+                temporalGranularity: "weekly"
                 }
-            },
+        },
 
-            // sort by popScore each month
-            { $sort: {"_id.timestamp": 1, "popScoreAgg": -1} },
-
-            // store all articles in sorted order in array for each month
-            {
-                $group: {
-                    _id: "$_id.timestamp",
-                    articleAidList: {$push: "$_id.aid"}
-                }
-            },
-
-            // keep only top five articles in array
-            { 
-                $project: { 
-                    _id: {$concat: ["w", { $toString: "$_id" }]}, 
-                    timestamp: "$_id", 
-                    articleAidList: { $slice: ["$articleAidList", 5]},
-                    temporalGranularity: "weekly"
-                    }
-            },
-
-            // output
-            {"$out": "popRankWk"}
-        ],
-        { allowDiskUse: true })
+        // output
+        {"$out": "popRankWk"}
+    ],
+    { allowDiskUse: true })
 //popRankDay
 db.read.aggregate([
-            // project relevant fields from db.read
-            { $project: { date: {"$toDate": {"$toLong": "$timestamp"}}, aid: 1, readOrNot: 1, agreeOrNot: 1, commentOrNot: 1, shareOrNot: 1} },
+    // project relevant fields from db.read
+    { $project: { date: {"$toDate": {"$toLong": "$timestamp"}}, aid: 1, readTimeLength: 1, agreeOrNot: 1, commentOrNot: 1, shareOrNot: 1} },
 
-            // add year and month fields
-            { $addFields: {
-                year: { $year: "$date" },
-                month: { $month: "$date" },
-                day: {$dayOfYear: "$date" },
-                popScore: {$sum: [{$toInt: "$readOrNot"}, {$toInt: "$agreeOrNot"}, {$toInt: "$commentOrNot"}, {$toInt: "$shareOrNot"}]}}
-            },
+    // add year and month fields
+    { $addFields: {
+        year: { $year: "$date" },
+        month: { $month: "$date" },
+        day: {$dayOfYear: "$date" },
+        popScore: {$sum: [{ if: { $gt: [{$toInt: "$readTimeLength"},0] }, then: 1, else: 0}, {$toInt: "$agreeOrNot"}, {$toInt: "$commentOrNot"}, {$toInt: "$shareOrNot"}]}}
+    },
 
-            // add unix timestamp defined only by yr and mth
-            { $addFields: { timestamp: { $subtract: [ { $dateFromParts: { 'year' : "$year", 'month' : "$month", 'day': "$day"} }, new Date("1970-01-01") ] }}},
+    // add unix timestamp defined only by yr and mth
+    { $addFields: { timestamp: { $subtract: [ { $dateFromParts: { 'year' : "$year", 'month' : "$month", 'day': "$day"} }, new Date("1970-01-01") ] }}},
 
-            // Group by year, month, aid and compute popularity score
-            {
-                $group: {
-                    _id: { "timestamp": "$timestamp", "aid": "$aid"},
-                    popScoreAgg: { $sum: "$popScore" }
-                }
-            },
+    // Group by year, month, aid and compute popularity score
+    {
+        $group: {
+            _id: { "timestamp": "$timestamp", "aid": "$aid"},
+            popScoreAgg: { $sum: "$popScore" }
+        }
+    },
 
-            // sort by popScore each month
-            { $sort: {"_id.timestamp": 1, "popScoreAgg": -1} },
+    // sort by popScore each month
+    { $sort: {"_id.timestamp": 1, "popScoreAgg": -1} },
 
-            // store all articles in sorted order in array for each month
-            {
-                $group: {
-                    _id: "$_id.timestamp",
-                    articleAidList: {$push: "$_id.aid"}
-                }
-            },
+    // store all articles in sorted order in array for each month
+    {
+        $group: {
+            _id: "$_id.timestamp",
+            articleAidList: {$push: "$_id.aid"}
+        }
+    },
 
-            // keep only top five articles in array
-            { 
-                $project: { 
-                    _id: {$concat: ["d", { $toString: "$_id" }]}, 
-                    timestamp: "$_id", 
-                    articleAidList: { $slice: ["$articleAidList", 5]},
-                    temporalGranularity: "daily"
-                    }
-            },
+    // keep only top five articles in array
+    { 
+        $project: { 
+            _id: {$concat: ["d", { $toString: "$_id" }]}, 
+            timestamp: "$_id", 
+            articleAidList: { $slice: ["$articleAidList", 5]},
+            temporalGranularity: "daily"
+            }
+    },
 
-            // output
-            {"$out": "popRankDay"}
-        ],
-        { allowDiskUse: true })
+    // output
+    {"$out": "popRankDay"}
+],
+{ allowDiskUse: true })
 
 //combine into popRank
 db.popRankMth.find().forEach( function(doc) { db.popRank.insert(doc) })

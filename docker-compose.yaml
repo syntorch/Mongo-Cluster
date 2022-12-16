@@ -19,6 +19,12 @@ services:
       - ./init_scripts:/init_scripts
       - router1_db:/data/db
       - router1_cfg:/data/configdb
+    depends_on:
+      - dbms1-svr1
+      - dbms1-svr2
+      - dbms2-svr1
+      - dbms2-svr2
+
 
   router2:
     container_name: router2
@@ -54,38 +60,59 @@ services:
       - cfg2_db:/data/db
       - cfg2_cfg:/data/configdb
 
-  dmbs1:
-    container_name: dbms1
+  dbms1-svr1:
+    container_name: dbms1-svr1
     image: mongo:6.0.1
     command: mongod --shardsvr --replSet dbms1 --port 27017 --dbpath /data/db
     ports:
       - 27300:27017
     volumes:
       - ./init_scripts:/init_scripts
-      - dbms1_db:/data/db
-      - dbms1_cfg:/data/configdb
-
-  dmbs2:
-    container_name: dbms2
+      - dbms1-svr1_db:/data/db
+      - dbms1-svr1_cfg:/data/configdb
+  
+  dbms1-svr2:
+    container_name: dbms1-svr2
     image: mongo:6.0.1
-    command: mongod --shardsvr --replSet dbms2 --port 27017 --dbpath /data/db
+    command: mongod --shardsvr --replSet dbms1 --port 27017 --dbpath /data/db
     ports:
       - 27301:27017
     volumes:
       - ./init_scripts:/init_scripts
-      - dbms2_db:/data/db
-      - dbms2_cfg:/data/configdb
+      - dbms1-svr2_db:/data/db
+      - dbms1-svr2_cfg:/data/configdb
 
-  shard_for_init1:
-    container_name: shard_for_init1
+  dbms2-svr1:
+    container_name: dbms2-svr1
     image: mongo:6.0.1
-    command: mongod --shardsvr --replSet shard_for_init1 --port 27017 --dbpath /data/db
+    command: mongod --shardsvr --replSet dbms2 --port 27017 --dbpath /data/db
     ports:
-      - 27302:27017
+      - 27310:27017
     volumes:
       - ./init_scripts:/init_scripts
-      - shard_for_init1_db:/data/db
-      - shard_for_init1_cfg:/data/configdb
+      - dbms2-svr1_db:/data/db
+      - dbms2-svr1_cfg:/data/configdb
+
+  dbms2-svr2:
+    container_name: dbms2-svr2
+    image: mongo:6.0.1
+    command: mongod --shardsvr --replSet dbms2 --port 27017 --dbpath /data/db
+    ports:
+      - 27311:27017
+    volumes:
+      - ./init_scripts:/init_scripts
+      - dbms2-svr2_db:/data/db
+      - dbms2-svr2_cfg:/data/configdb
+  # shard_for_init1:
+  #   container_name: shard_for_init1
+  #   image: mongo:6.0.1
+  #   command: mongod --shardsvr --replSet shard_for_init1 --port 27017 --dbpath /data/db
+  #   ports:
+  #     - 27302:27017
+  #   volumes:
+  #     - ./init_scripts:/init_scripts
+  #     - shard_for_init1_db:/data/db
+  #     - shard_for_init1_cfg:/data/configdb
 
   gridfs1:
     container_name: gridfs1
@@ -111,17 +138,19 @@ services:
 
   monitor1:
     container_name: monitor1
-    image: mongo-express
+    image: mongo-express:latest
     environment:
       ME_CONFIG_MONGODB_SERVER: router1
-      ME_CONFIG_MONGODB_PORT: "27017"
-      ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
-      ME_CONFIG_BASICAUTH_USERNAME: root
-      ME_CONFIG_BASICAUTH_PASSWORD: root
+      ME_CONFIG_MONGODB_PORT: 27017
+      # ME_CONFIG_MONGODB_ENABLE_ADMIN: "true"
+      # ME_CONFIG_MONGODB_URL: mongodb://router1:27017/
+      # ME_CONFIG_BASICAUTH_USERNAME: root
+      # ME_CONFIG_BASICAUTH_PASSWORD: root
     ports:
-      - "8001:8081"
-    # depends_on:
-    #   - router1:
+      - "8081:8081"
+    depends_on:
+      - router1
+    restart: always
     #     condition: service_healthy
 
   # monitor2:
@@ -147,12 +176,16 @@ volumes:
   cfg1_cfg:
   cfg2_db:
   cfg2_cfg:
-  dbms1_db:
-  dbms1_cfg:
-  dbms2_db:
-  dbms2_cfg:
-  shard_for_init1_db:
-  shard_for_init1_cfg:
+  dbms1-svr1_db:
+  dbms1-svr1_cfg:
+  dbms1-svr2_db:
+  dbms1-svr2_cfg:
+  dbms2-svr1_db:
+  dbms2-svr1_cfg:
+  dbms2-svr2_db:
+  dbms2-svr2_cfg:
+  # shard_for_init1_db:
+  # shard_for_init1_cfg:
   gridfs1_db:
   gridfs1_cfg:
   gridfs2_db:
