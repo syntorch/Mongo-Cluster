@@ -1,0 +1,4 @@
+Backup_File=volumes/
+sudo rm -rf $Backup_File
+mkdir $Backup_File
+sudo cp -rp $(sudo find /var/lib/docker/volumes -name "mongo-cluster*") $Backup_File
