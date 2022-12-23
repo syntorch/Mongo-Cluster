@@ -20,6 +20,8 @@ load:
 load_media:
 	python3 store_media.py
 
+sharding: sharding1 sharding2 sharding3 sharding4
+
 sharding1:
 	docker exec -it router1 bash -c "mongosh < /init_scripts/do_sharding-part1.js"
 
