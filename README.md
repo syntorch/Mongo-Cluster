@@ -1,6 +1,6 @@
 # Mongo-Cluster for DDBS
 
-[toc]
+
 
 We would like to build an application for querying various articles, providing users, their reading record and show the popular article ranking .
 
@@ -155,8 +155,8 @@ Because currently the monitor is not set the password and can be accessed by any
 
 ```yaml
 monitor1:
-	...
-	environemnt:
+    ...
+    environemnt:
         ...
         ME_CONFIG_BASICAUTH_USERNAME: set_username_here
         ME_CONFIG_BASICAUTH_PASSWORD: set_passwd_here
